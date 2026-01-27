@@ -21,40 +21,37 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
 # ============================
-#     LISTAR EVENTOS
+# LISTAR EVENTOS
 # ============================
 @app.route("/")
 @app.route("/events")
 def events():
     conn = get_db()
     c = conn.cursor()
-    # Ajustar columnas según la nueva tabla
     c.execute("SELECT id, denominacio, descripcio, imatges FROM events ORDER BY id DESC")
     rows = c.fetchall()
     conn.close()
-
     events_list = [
         {
             "id": r[0],
             "denominacio": r[1],
             "descripcio": r[2],
             "imatges": r[3]
-        }
-        for r in rows
+        } for r in rows
     ]
-
     return render_template("events.html", title="Eventos", events=events_list)
 
 # ============================
-#     PÁGINA DE ACTUALIZACIÓN
+# PÁGINA DE ACTUALIZACIÓN
 # ============================
 @app.route("/update")
 def update_events_page():
     return render_template("update_events.html", title="Actualizar BD")
 
 # ============================
-#     PROCESAR JSON SUBIDO
+# PROCESAR JSON SUBIDO
 # ============================
 @app.route("/update_db", methods=["POST"])
 def update_db_from_file():
@@ -63,7 +60,6 @@ def update_db_from_file():
         return redirect(url_for("update_events_page"))
 
     file = request.files["jsonfile"]
-
     if file.filename == "":
         flash("Debes seleccionar un archivo.", "warning")
         return redirect(url_for("update_events_page"))
@@ -87,7 +83,6 @@ def update_db_from_file():
 
     for item in data:
         id_event = item.get(":id")
-
         # Comprobar si ya existe
         c.execute("SELECT COUNT(*) FROM events WHERE id = ?", (id_event,))
         if c.fetchone()[0] > 0:
@@ -101,7 +96,7 @@ def update_db_from_file():
             if item.get("imatges", "").startswith("/"):
                 imatges = base_url + item.get("imatges")
 
-        # Insertar registro en la nueva tabla
+        # Insertar registro
         c.execute("""
             INSERT INTO events (
                 id, version, created_at, updated_at, codi, data_fi, data_inici,
@@ -109,8 +104,7 @@ def update_db_from_file():
                 entrades, horari, links, imatges, adreca, comarca_i_municipi,
                 espai, latitud, longitud, telefon, url, imgapp, descripcio_html,
                 municipi, comarca
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             id_event,
             item.get(":version", ""),
@@ -140,12 +134,10 @@ def update_db_from_file():
             item.get("municipi", ""),
             item.get("comarca", "")
         ))
-
         nuevos += 1
 
     conn.commit()
     conn.close()
-
     flash(f"{nuevos} nuevos eventos añadidos.", "success")
     return redirect(url_for("events"))
 
@@ -153,12 +145,11 @@ def update_db_from_file():
 @app.route("/api/events")
 def api_events():
     page = int(request.args.get("page", 1))
-    per_page = 20
+    per_page = int(request.args.get("per_page", 20))  # Ahora acepta per_page variable
     offset = (page - 1) * per_page
 
     conn = get_db()
     c = conn.cursor()
-
     c.execute("""
         SELECT id, denominacio, descripcio, imatges, data_inici, data_fi,
                horari, comarca_i_municipi, espai, entrades, url
@@ -166,7 +157,6 @@ def api_events():
         ORDER BY created_at DESC
         LIMIT ? OFFSET ?
     """, (per_page, offset))
-
     rows = c.fetchall()
     conn.close()
 
@@ -185,12 +175,17 @@ def api_events():
             "entrades": r["entrades"],
             "url": r["url"],
         })
-
     return jsonify({"events": events})
 
+# ============================
+# NUEVA RUTA: Favoritos
+# ============================
+@app.route("/favorites")
+def favorites():
+    return render_template("favorites.html", title="Mis Favoritos")
 
 # ============================
-#     MAIN
+# MAIN
 # ============================
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container my-4">
+    <h1 class="mb-4">Mis Favoritos</h1>
+    
+    <!-- Mensaje si no hay favoritos -->
+    <div id="noFavorites" class="alert alert-info text-center" style="display: none;">
+        Aún no has marcado ningún evento como favorito. Ve a la página de <a href="{{ url_for('events') }}" class="alert-link">Eventos</a> para empezar.
+    </div>
+    
+    <!-- Contenedor de tarjetas -->
+    <div class="row" id="favoritesContainer"></div>
+</div>
+
+<script>
+// IDs de favoritos (strings)
+let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
+favorites = favorites.map(id => String(id));
+
+// Función para cargar y mostrar favoritos
+async function loadFavorites() {
+    const container = document.getElementById("favoritesContainer");
+    const noFavMsg = document.getElementById("noFavorites");
+    
+    // Limpiar contenedor
+    container.innerHTML = '';
+    
+    if (favorites.length === 0) {
+        noFavMsg.style.display = 'block';
+        return;
+    }
+    
+    noFavMsg.style.display = 'none';
+    
+    try {
+        // Cargamos eventos paginados hasta obtener todos los necesarios
+        let allEvents = [];
+        let page = 1;
+        let hasMore = true;
+        
+        while (hasMore && favorites.length > allEvents.length) {
+            const response = await fetch(`/api/events?page=${page}&per_page=100`);
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status}`);
+            }
+            const data = await response.json();
+            
+            allEvents = allEvents.concat(data.events);
+            
+            if (data.events.length < 100) {
+                hasMore = false;
+            }
+            page++;
+        }
+        
+        // Filtrar solo los favoritos
+        const favoriteEvents = allEvents.filter(event => 
+            favorites.includes(String(event.id))
+        );
+        
+        if (favoriteEvents.length === 0) {
+            noFavMsg.style.display = 'block';
+            return;
+        }
+        
+        // Crear tarjetas
+        favoriteEvents.forEach(event => {
+            const card = document.createElement("div");
+            card.className = "col-md-4 mb-4 event-card";
+            card.innerHTML = `
+                <div class="card h-100 shadow-sm">
+                    ${event.imatges ? `<img src="${event.imatges}" class="card-img-top" alt="${event.denominacio}" style="height: 200px; object-fit: cover;">` : ""}
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h5 class="card-title mb-2">
+                                <a href="/event/${event.id}" class="text-decoration-none text-dark">
+                                    ${event.denominacio}
+                                </a>
+                            </h5>
+                            <button class="btn btn-link favorite-btn p-0" data-id="${event.id}" title="Quitar de favoritos">
+                                <i class="fas fa-heart fa-lg" style="color: #dc3545;"></i>
+                            </button>
+                        </div>
+                        <p class="card-text text-muted small mb-3">
+                            ${event.descripcio ? event.descripcio.substring(0, 150) + (event.descripcio.length > 150 ? '...' : '') : 'Sin descripción'}
+                        </p>
+                        <ul class="list-unstyled small text-muted">
+                            ${event.data_inici ? `<li><strong>Inicio:</strong> ${event.data_inici}</li>` : ""}
+                            ${event.data_fi ? `<li><strong>Fin:</strong> ${event.data_fi}</li>` : ""}
+                            ${event.horari ? `<li><strong>Hora:</strong> ${event.horari}</li>` : ""}
+                            ${event.comarca_i_municipi ? `<li><strong>Ubicación:</strong> ${event.comarca_i_municipi}</li>` : ""}
+                            ${event.espai ? `<li><strong>Espacio:</strong> ${event.espai}</li>` : ""}
+                            ${event.entrades ? `<li><strong>Entradas:</strong> ${event.entrades}</li>` : ""}
+                            ${event.url ? `<li><a href="${event.url}" target="_blank" class="text-primary">Ver en web</a></li>` : ""}
+                        </ul>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+        
+    } catch (error) {
+        console.error('Error al cargar favoritos:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                No se pudieron cargar los eventos favoritos. Por favor, intenta recargar la página.
+            </div>
+        `;
+    }
+}
+
+// Toggle favorito
+function toggleFavorite(eventId) {
+    eventId = String(eventId);
+    
+    if (favorites.includes(eventId)) {
+        favorites = favorites.filter(id => id !== eventId);
+    } else {
+        favorites.push(eventId);
+    }
+    
+    localStorage.setItem('favorites', JSON.stringify(favorites));
+    
+    // Recargar la lista
+    loadFavorites();
+}
+
+// Delegación de eventos para clics en botones de favorito
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.favorite-btn');
+    if (btn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const eventId = btn.dataset.id;
+        toggleFavorite(eventId);
+    }
+});
+
+// Cargar al iniciar
+document.addEventListener('DOMContentLoaded', loadFavorites);
+</script>
+{% endblock %}

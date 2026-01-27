@@ -1,15 +1,14 @@
-
 {% extends "base.html" %}
-{% block content %}
 
+{% block content %}
 <div class="container my-4">
     <h1 class="mb-4">{{ title }}</h1>
-
+    
     <!-- Barra de búsqueda -->
     <input type="text" id="searchInput" class="form-control mb-3" placeholder="Buscar eventos...">
-
+    
     <div class="row" id="eventsContainer"></div>
-
+    
     <!-- Cargando -->
     <div id="loading" class="text-center my-4" style="display:none;">
         <div class="spinner-border" role="status"></div>
@@ -18,79 +17,141 @@
 </div>
 
 <script>
+// Variables globales
 let page = 1;
 let loading = false;
 
+// Array de favoritos (strings)
+let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
+// Aseguramos que sean strings
+favorites = favorites.map(id => String(id));
+
 // --------------------------------------------------
-// Cargar una página de eventos por AJAX
+// Cargar eventos por AJAX
 // --------------------------------------------------
 async function loadEvents() {
     if (loading) return;
     loading = true;
-
     document.getElementById("loading").style.display = "block";
 
-    const response = await fetch(`/api/events?page=${page}`);
-    const data = await response.json();
+    try {
+        const response = await fetch(`/api/events?page=${page}`);
+        if (!response.ok) throw new Error('Error al cargar eventos');
+        const data = await response.json();
 
-    document.getElementById("loading").style.display = "none";
-    loading = false;
+        document.getElementById("loading").style.display = "none";
+        loading = false;
 
-    if (data.events.length === 0) return; // no más datos
+        if (data.events.length === 0) return;
 
-    const container = document.getElementById("eventsContainer");
+        const container = document.getElementById("eventsContainer");
 
-    data.events.forEach(event => {
-        const card = document.createElement("div");
-        card.className = "col-md-4 mb-4 event-card";
-        card.innerHTML = `
-            <div class="card h-100">
-                ${event.imatges ? `<img src="${event.imatges}" class="card-img-top">` : ""}
-                <div class="card-body">
-                    <h5 class="card-title">${event.denominacio}</h5>
-                    <p>${event.descripcio || ""}</p>
-                    <ul class="list-unstyled">
-                        ${event.data_inici ? `<li><strong>Inicio:</strong> ${event.data_inici}</li>` : ""}
-                        ${event.data_fi ? `<li><strong>Fin:</strong> ${event.data_fi}</li>` : ""}
-                        ${event.horari ? `<li><strong>Hora:</strong> ${event.horari}</li>` : ""}
-                        ${event.comarca_i_municipi ? `<li><strong>Ubicación:</strong> ${event.comarca_i_municipi}</li>` : ""}
-                        ${event.espai ? `<li><strong>Espacio:</strong> ${event.espai}</li>` : ""}
-                        ${event.entrades ? `<li><strong>Entradas:</strong> ${event.entrades}</li>` : ""}
-                        ${event.url ? `<li><a href="${event.url}" target="_blank">Web</a></li>` : ""}
-                    </ul>
+        data.events.forEach(event => {
+            const card = document.createElement("div");
+            card.className = "col-md-4 mb-4 event-card";
+            card.innerHTML = `
+                <div class="card h-100">
+                    ${event.imatges ? `<img src="${event.imatges}" class="card-img-top" alt="${event.denominacio}">` : ""}
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="card-title">${event.denominacio}</h5>
+                            <button class="btn btn-link favorite-btn p-0" data-id="${event.id}" title="Añadir a favoritos">
+                                <i class="far fa-heart fa-lg"></i>
+                            </button>
+                        </div>
+                        <p class="card-text text-muted">${event.descripcio || ""}</p>
+                        <ul class="list-unstyled small">
+                            ${event.data_inici ? `<li><strong>Inicio:</strong> ${event.data_inici}</li>` : ""}
+                            ${event.data_fi ? `<li><strong>Fin:</strong> ${event.data_fi}</li>` : ""}
+                            ${event.horari ? `<li><strong>Hora:</strong> ${event.horari}</li>` : ""}
+                            ${event.comarca_i_municipi ? `<li><strong>Ubicación:</strong> ${event.comarca_i_municipi}</li>` : ""}
+                            ${event.espai ? `<li><strong>Espacio:</strong> ${event.espai}</li>` : ""}
+                            ${event.entrades ? `<li><strong>Entradas:</strong> ${event.entrades}</li>` : ""}
+                            ${event.url ? `<li><a href="${event.url}" target="_blank" class="text-primary">Web</a></li>` : ""}
+                        </ul>
+                    </div>
                 </div>
-            </div>
-        `;
-        container.appendChild(card);
-    });
+            `;
+            container.appendChild(card);
+        });
 
-    page++;
+        // Actualizamos el estado visual de todos los corazones después de añadir tarjetas
+        updateFavoriteButtons();
+        page++;
+    } catch (error) {
+        console.error('Error cargando eventos:', error);
+        document.getElementById("loading").style.display = "none";
+        loading = false;
+    }
 }
 
 // --------------------------------------------------
 // Scroll infinito
 // --------------------------------------------------
 window.addEventListener("scroll", () => {
-    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200) {
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200 && !loading) {
         loadEvents();
     }
 });
 
 // --------------------------------------------------
-// Buscar en las tarjetas cargadas
+// Búsqueda en tiempo real (filtra tarjetas ya cargadas)
 // --------------------------------------------------
 document.getElementById("searchInput").addEventListener("input", function() {
-    let filter = this.value.toLowerCase();
-    document.querySelectorAll('.event-card').forEach(function(card) {
-        let text = card.textContent.toLowerCase();
+    const filter = this.value.toLowerCase();
+    document.querySelectorAll('.event-card').forEach(card => {
+        const text = card.textContent.toLowerCase();
         card.style.display = text.includes(filter) ? "" : "none";
     });
 });
 
-// Cargar primera página al entrar
+// --------------------------------------------------
+// Gestión de favoritos
+// --------------------------------------------------
+function toggleFavorite(eventId) {
+    eventId = String(eventId);  // siempre string
+
+    if (favorites.includes(eventId)) {
+        favorites = favorites.filter(id => id !== eventId);
+    } else {
+        favorites.push(eventId);
+    }
+
+    localStorage.setItem('favorites', JSON.stringify(favorites));
+    updateFavoriteButtons();
+}
+
+function updateFavoriteButtons() {
+    document.querySelectorAll('.favorite-btn').forEach(btn => {
+        const eventId = String(btn.dataset.id);
+        const icon = btn.querySelector('i');
+
+        if (favorites.includes(eventId)) {
+            icon.classList.remove('far');
+            icon.classList.add('fas');
+            icon.style.color = '#dc3545';  // rojo cuando es favorito
+        } else {
+            icon.classList.remove('fas');
+            icon.classList.add('far');
+            icon.style.color = '';  // color por defecto
+        }
+    });
+}
+
+// --------------------------------------------------
+// Listener para clics en corazones (delegación)
+// --------------------------------------------------
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.favorite-btn');
+    if (btn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const eventId = btn.dataset.id;
+        toggleFavorite(eventId);
+    }
+});
+
+// Cargar la primera página al iniciar
 loadEvents();
 </script>
-
 {% endblock %}
-
-
