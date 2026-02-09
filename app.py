@@ -44,6 +44,30 @@ def events():
     return render_template("events.html", title="Eventos", events=events_list)
 
 # ============================
+# PÁGINA DE DETALLE DE EVENTO
+# ============================
+@app.route("/event/<event_id>")
+def event_detail(event_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""
+        SELECT * FROM events 
+        WHERE id = ? 
+        ORDER BY created_at DESC
+        LIMIT 1
+    """, (event_id,))
+    event = c.fetchone()
+    conn.close()
+    
+    if event is None:
+        flash("Evento no encontrado", "danger")
+        return redirect(url_for('events'))
+    
+    # Convertir el resultado a diccionario
+    event_dict = dict(event)
+    return render_template("event_detail.html", event=event_dict)
+
+# ============================
 # PÁGINA DE ACTUALIZACIÓN
 # ============================
 @app.route("/update")

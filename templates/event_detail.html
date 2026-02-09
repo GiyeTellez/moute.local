@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+                {% if event.imatges %}
+                    <img src="{{ event.imatges }}" class="card-img-top" alt="{{ event.denominacio }}" style="height: 400px; object-fit: cover;">
+                {% endif %}
+                
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-4">
+                        <div>
+                            <h1 class="card-title fw-bold">{{ event.denominacio }}</h1>
+                            <p class="text-muted">{{ event.subtitol or "" }}</p>
+                        </div>
+                        <button class="btn btn-link favorite-btn p-0" data-id="{{ event.id }}" title="Añadir a favoritos">
+                            <i class="far fa-heart fa-2x"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <div class="bg-light p-3 rounded-3">
+                                <h5 class="fw-bold mb-3"><i class="fas fa-calendar-alt me-2 text-primary"></i> Fecha y hora</h5>
+                                <p class="mb-2"><strong>Inicio:</strong> {{ event.data_inici.split('T')[0] }}</p>
+                                {% if event.data_fi %}
+                                    <p class="mb-2"><strong>Fin:</strong> {{ event.data_fi.split('T')[0] }}</p>
+                                {% endif %}
+                                <p class="mb-0"><strong>Hora:</strong> {{ event.horari or "No especificado" }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="bg-light p-3 rounded-3">
+                                <h5 class="fw-bold mb-3"><i class="fas fa-map-marker-alt me-2 text-primary"></i> Ubicación</h5>
+                                <p class="mb-2"><strong>Lugar:</strong> {{ event.comarca_i_municipi.split('agenda:ubicacions/')[1] or event.comarca_i_municipi }}</p>
+                                <p class="mb-2"><strong>Espacio:</strong> {{ event.espai or "No especificado" }}</p>
+                                <p class="mb-0"><strong>Teléfono:</strong> {{ event.tel_fon or "No disponible" }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-light p-4 rounded-3 mb-4">
+                        <h5 class="fw-bold mb-3"><i class="fas fa-info-circle me-2 text-primary"></i> Descripción</h5>
+                        <div class="card-text">
+                            {{ event.descripcio_html|safe }}
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex flex-column flex-md-row gap-3">
+                        {% if event.url %}
+                            <a href="{{ event.url }}" target="_blank" class="btn btn-primary flex-grow-1">
+                                <i class="fas fa-external-link-alt me-2"></i> Visitar web oficial
+                            </a>
+                        {% endif %}
+                        <a href="{{ url_for('events') }}" class="btn btn-outline-secondary flex-grow-1">
+                            <i class="fas fa-arrow-left me-2"></i> Volver a eventos
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-body">
+                    <h5 class="card-title fw-bold mb-3"><i class="fas fa-ticket-alt me-2 text-primary"></i> Entradas</h5>
+                    <p class="card-text">
+                        {% if event.entrades %}
+                            {{ event.entrades }}
+                        {% else %}
+                            No se han especificado precios de entrada.
+                        {% endif %}
+                    </p>
+                    
+                    {% if event.entrades and event.linkbotoentrades %}
+                        <a href="{{ event.linkbotoentrades }}" target="_blank" class="btn btn-success w-100 mt-3">
+                            <i class="fas fa-ticket-alt me-2"></i> Comprar entradas
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card shadow-sm border-0 rounded-3">
+                <div class="card-body">
+                    <h5 class="card-title fw-bold mb-3"><i class="fas fa-info-circle me-2 text-primary"></i> Detalles adicionales</h5>
+                    <ul class="list-unstyled">
+                        {% if event.tags_categor_es %}
+                            <li class="mb-2"><strong>Categoría:</strong> {{ event.tags_categor_es.split('agenda:categories/')[1] or event.tags_categor_es }}</li>
+                        {% endif %}
+                        {% if event.tags_mbits %}
+                            <li class="mb-2"><strong>Ámbito:</strong> {{ event.tags_mbits.split('agenda:ambits/')[1] or event.tags_mbits }}</li>
+                        {% endif %}
+                        {% if event.gratuita %}
+                            <li class="mb-2"><strong>Entrada:</strong> {{ event.gratuita }}</li>
+                        {% endif %}
+                        {% if event.modalitat %}
+                            <li class="mb-2"><strong>Modalidad:</strong> {{ event.modalitat }}</li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Lógica de favoritos
+let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
+favorites = favorites.map(id => String(id));
+
+function toggleFavorite(eventId) {
+    eventId = String(eventId);
+    
+    if (favorites.includes(eventId)) {
+        favorites = favorites.filter(id => id !== eventId);
+    } else {
+        favorites.push(eventId);
+    }
+    
+    localStorage.setItem('favorites', JSON.stringify(favorites));
+    updateFavoriteButtons();
+}
+
+function updateFavoriteButtons() {
+    const btn = document.querySelector('.favorite-btn');
+    const icon = btn.querySelector('i');
+    const eventId = btn.dataset.id;
+    
+    if (favorites.includes(eventId)) {
+        icon.classList.remove('far');
+        icon.classList.add('fas');
+        icon.style.color = '#dc3545';
+    } else {
+        icon.classList.remove('fas');
+        icon.classList.add('far');
+        icon.style.color = '';
+    }
+}
+
+// Inicializar favoritos
+document.addEventListener('DOMContentLoaded', () => {
+    updateFavoriteButtons();
+    
+    document.querySelector('.favorite-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFavorite(e.target.closest('.favorite-btn').dataset.id);
+    });
+});
+</script>
+{% endblock %}
