@@ -2,17 +2,19 @@
 
 {% block content %}
 <div class="container my-4">
-    <h1 class="mb-4">{{ title }}</h1>
+    <h1 class="mb-4 section-title">{{ title }}</h1>
     
     <!-- Barra de búsqueda -->
-    <input type="text" id="searchInput" class="form-control mb-3" placeholder="Buscar eventos...">
+    <input type="text" id="searchInput" class="form-control mb-3 search-input" placeholder="Buscar eventos...">
     
     <div class="row" id="eventsContainer"></div>
     
     <!-- Cargando -->
     <div id="loading" class="text-center my-4" style="display:none;">
-        <div class="spinner-border" role="status"></div>
-        <p>Cargando más eventos...</p>
+        <div class="spinner-border" role="status" style="color: #7e57c2;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2">Cargando más eventos...</p>
     </div>
 </div>
 
@@ -47,33 +49,63 @@ async function loadEvents() {
         const container = document.getElementById("eventsContainer");
 
         data.events.forEach(event => {
+            // Normalizar URL de imagen
+            let imageUrl = event.imatges && event.imatges.trim() !== "" ? event.imatges.trim() : '';
+            
+            // Si la URL es relativa, añadir dominio base
+            if (imageUrl && imageUrl.startsWith('/')) {
+                imageUrl = 'https://agenda.cultura.gencat.cat' + imageUrl;
+            }
+            
+            // Si no tiene protocolo, asumir HTTPS
+            if (imageUrl && !imageUrl.startsWith('http')) {
+                imageUrl = 'https:' + imageUrl;
+            }
+
             const card = document.createElement("div");
             card.className = "col-md-4 mb-4 event-card";
             card.innerHTML = `
                 <div class="card h-100 shadow-sm border-0 rounded-3 overflow-hidden">
-                    ${event.imatges ? `<img src="${event.imatges}" class="card-img-top" alt="${event.denominacio}" style="height: 200px; object-fit: cover;">` : ""}
+                    <!-- Imagen clickeable -->
+                    <a href="/event/${event.id}" class="text-decoration-none">
+                        ${imageUrl ? `
+                            <div class="position-relative" style="height: 200px;">
+                                <img src="${imageUrl}" 
+                                     class="card-img-top" 
+                                     alt="${event.denominacio}" 
+                                     style="height: 100%; width: 100%; object-fit: cover;"
+                                     onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\\"bg-gradient d-flex align-items-center justify-content-center\\\" style=\\\"height:200px; background:linear-gradient(135deg, #e0d5f7, #7e57c2);\\\"><i class=\\\"fas fa-image fa-4x text-white-50\\\"></i></div>'">
+                            </div>
+                        ` : `
+                            <div class="bg-gradient d-flex align-items-center justify-content-center" style="height: 200px; background: linear-gradient(135deg, #e0d5f7, #7e57c2);">
+                                <i class="fas fa-image fa-4x text-white-50"></i>
+                            </div>
+                        `}
+                    </a>
+                    
                     <div class="card-body d-flex flex-column">
-                        <a href="/event/${event.id}" class="stretched-link text-decoration-none"></a>
                         <div class="d-flex justify-content-between align-items-start mb-3">
-                            <h5 class="card-title fw-bold text-dark mb-0">${event.denominacio}</h5>
+                            <h5 class="card-title fw-bold text-dark mb-0">
+                                <a href="/event/${event.id}" class="text-decoration-none text-dark stretched-link">${event.denominacio}</a>
+                            </h5>
                             <button class="btn btn-sm btn-link favorite-btn p-0" data-id="${event.id}" title="Añadir a favoritos">
                                 <i class="far fa-heart fa-lg"></i>
                             </button>
                         </div>
-                        <p class="card-text text-muted flex-grow-1">${event.descripcio || "Sin descripción"}</p>
+                        <p class="card-text text-muted flex-grow-1">${event.descripcio ? event.descripcio.substring(0, 100) + (event.descripcio.length > 100 ? '...' : '') : "Sin descripción"}</p>
                         
                         <div class="row g-2 mt-3">
                             <div class="col-md-6">
-                                ${event.data_inici ? `<p class="mb-1"><i class="fas fa-calendar-alt me-1 text-primary"></i> <strong>Fecha:</strong> ${event.data_inici.split('T')[0]}</p>` : ""}
-                                ${event.horari ? `<p class="mb-1"><i class="fas fa-clock me-1 text-primary"></i> <strong>Hora:</strong> ${event.horari}</p>` : ""}
+                                ${event.data_inici ? `<p class="mb-1"><i class="fas fa-calendar-alt me-1" style="color: #7e57c2;"></i> <strong>Fecha:</strong> ${event.data_inici.split('T')[0]}</p>` : ""}
+                                ${event.horari ? `<p class="mb-1"><i class="fas fa-clock me-1" style="color: #7e57c2;"></i> <strong>Hora:</strong> ${event.horari}</p>` : ""}
                             </div>
                             <div class="col-md-6">
-                                ${event.comarca_i_municipi ? `<p class="mb-1"><i class="fas fa-map-marker-alt me-1 text-primary"></i> <strong>Lugar:</strong> ${event.comarca_i_municipi.split('agenda:ubicacions/')[1] || event.comarca_i_municipi}</p>` : ""}
-                                ${event.entrades ? `<p class="mb-1"><i class="fas fa-euro-sign me-1 text-primary"></i> <strong>Precio:</strong> ${event.entrades}</p>` : ""}
+                                ${event.comarca_i_municipi ? `<p class="mb-1"><i class="fas fa-map-marker-alt me-1" style="color: #7e57c2;"></i> <strong>Lugar:</strong> ${event.comarca_i_municipi.split('agenda:ubicacions/')[1] || event.comarca_i_municipi}</p>` : ""}
+                                ${event.entrades ? `<p class="mb-1"><i class="fas fa-euro-sign me-1" style="color: #7e57c2;"></i> <strong>Precio:</strong> ${event.entrades}</p>` : ""}
                             </div>
                         </div>
                         
-                        ${event.url ? `<a href="${event.url}" target="_blank" class="btn btn-outline-primary btn-sm mt-3">
+                        ${event.url ? `<a href="${event.url}" target="_blank" class="btn btn-outline-primary btn-sm mt-3" onclick="event.stopPropagation();">
                             <i class="fas fa-external-link-alt me-1"></i> Ver en web
                         </a>` : ""}
                     </div>

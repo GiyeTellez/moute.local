@@ -14,6 +14,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "moute.db")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 
+# Dominio base para las imágenes
+BASE_IMAGE_URL = "https://agenda.cultura.gencat.cat"
+
 # -----------------------------
 # Conexión a la base de datos
 # -----------------------------
@@ -112,13 +115,12 @@ def update_db_from_file():
         if c.fetchone()[0] > 0:
             continue
 
-        # Construir enlace a imagen
-        imatges = ""
-        links = item.get("enlla_os", "")
-        if links:
-            base_url = links.split(",")[0]
-            if item.get("imatges", "").startswith("/"):
-                imatges = base_url + item.get("imatges")
+        # Construir enlace a imagen - CORREGIDO
+        imatges = item.get("imatges", "")
+        if imatges and imatges.startswith("/"):
+            imatges = BASE_IMAGE_URL + imatges
+        elif not imatges.startswith("http"):
+            imatges = ""
 
         # Insertar registro
         c.execute("""
@@ -169,7 +171,7 @@ def update_db_from_file():
 @app.route("/api/events")
 def api_events():
     page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", 20))  # Ahora acepta per_page variable
+    per_page = int(request.args.get("per_page", 20))
     offset = (page - 1) * per_page
 
     conn = get_db()

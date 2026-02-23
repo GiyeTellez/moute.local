@@ -5,8 +5,16 @@
     <div class="row">
         <div class="col-lg-8">
             <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
-                {% if event.imatges %}
-                    <img src="{{ event.imatges }}" class="card-img-top" alt="{{ event.denominacio }}" style="height: 400px; object-fit: cover;">
+                {% if event.imatges and event.imatges.strip() != "" %}
+                    <img src="{{ event.imatges }}" 
+                         class="card-img-top" 
+                         alt="{{ event.denominacio }}" 
+                         style="height: 400px; object-fit: cover; width: 100%;"
+                         onerror="this.onerror=null; this.src='https://via.placeholder.com/800x400/e0d5f7/6a1b9a?text=Sin+Imagen'">
+                {% else %}
+                    <div class="bg-gradient p-5 d-flex align-items-center justify-content-center" style="height: 400px; background: linear-gradient(135deg, #e0d5f7, #7e57c2);">
+                        <i class="fas fa-image fa-5x text-white-50"></i>
+                    </div>
                 {% endif %}
                 
                 <div class="card-body">
