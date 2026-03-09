@@ -98,11 +98,13 @@ def update_db_from_file():
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-    except:
-        flash("Archivo JSON inválido.", "danger")
+    except Exception as e:
+        flash(f"Archivo JSON inválido: {str(e)}", "danger")
+        os.remove(path)
         return redirect(url_for("update_events_page"))
     finally:
-        os.remove(path)
+        if os.path.exists(path):
+            os.remove(path)
 
     conn = get_db()
     c = conn.cursor()
@@ -110,19 +112,22 @@ def update_db_from_file():
 
     for item in data:
         id_event = item.get(":id")
-        # Comprobar si ya existe
         c.execute("SELECT COUNT(*) FROM events WHERE id = ?", (id_event,))
         if c.fetchone()[0] > 0:
             continue
 
-        # Construir enlace a imagen - CORREGIDO
-        imatges = item.get("imatges", "")
-        if imatges and imatges.startswith("/"):
-            imatges = BASE_IMAGE_URL + imatges
-        elif not imatges.startswith("http"):
-            imatges = ""
+        # ✅ CORRECCIÓN CLAVE: Extraer PRIMERA imagen y construir URL completa
+        imatges_raw = item.get("imatges", "").strip()
+        imatges = ""
+        if imatges_raw:
+            # Tomar solo la primera imagen (separadas por comas)
+            first_image = imatges_raw.split(",")[0].strip()
+            # Añadir dominio base si es ruta relativa
+            if first_image.startswith("/"):
+                imatges = "https://agenda.cultura.gencat.cat" + first_image
+            elif first_image.startswith("http"):
+                imatges = first_image
 
-        # Insertar registro
         c.execute("""
             INSERT INTO events (
                 id, version, created_at, updated_at, codi, data_fi, data_inici,
@@ -147,7 +152,7 @@ def update_db_from_file():
             item.get("entrades", ""),
             item.get("horari", ""),
             item.get("enlla_os", ""),
-            imatges,
+            imatges,  # ✅ URL completa aquí
             item.get("adre_a", ""),
             item.get("comarca_i_municipi", ""),
             item.get("espai", ""),
