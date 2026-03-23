@@ -13,9 +13,7 @@ app.secret_key = "clave-secreta-moute"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "moute.db")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-
-# Dominio base para las imágenes
-BASE_IMAGE_URL = "https://agenda.cultura.gencat.cat"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # -----------------------------
 # Conexión a la base de datos
@@ -31,20 +29,7 @@ def get_db():
 @app.route("/")
 @app.route("/events")
 def events():
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT id, denominacio, descripcio, imatges FROM events ORDER BY id DESC")
-    rows = c.fetchall()
-    conn.close()
-    events_list = [
-        {
-            "id": r[0],
-            "denominacio": r[1],
-            "descripcio": r[2],
-            "imatges": r[3]
-        } for r in rows
-    ]
-    return render_template("events.html", title="Eventos", events=events_list)
+    return render_template("events.html", title="Eventos")
 
 # ============================
 # PÁGINA DE DETALLE DE EVENTO
@@ -53,12 +38,7 @@ def events():
 def event_detail(event_id):
     conn = get_db()
     c = conn.cursor()
-    c.execute("""
-        SELECT * FROM events 
-        WHERE id = ? 
-        ORDER BY created_at DESC
-        LIMIT 1
-    """, (event_id,))
+    c.execute("SELECT * FROM events WHERE id = ?", (event_id,))
     event = c.fetchone()
     conn.close()
     
@@ -66,7 +46,6 @@ def event_detail(event_id):
         flash("Evento no encontrado", "danger")
         return redirect(url_for('events'))
     
-    # Convertir el resultado a diccionario
     event_dict = dict(event)
     return render_template("event_detail.html", event=event_dict)
 
@@ -116,7 +95,7 @@ def update_db_from_file():
         if c.fetchone()[0] > 0:
             continue
 
-        # ✅ CORRECCIÓN CLAVE: Extraer PRIMERA imagen y construir URL completa
+        # CORRECCIÓN CLAVE: Extraer PRIMERA imagen y construir URL completa
         imatges_raw = item.get("imatges", "").strip()
         imatges = ""
         if imatges_raw:
@@ -152,7 +131,7 @@ def update_db_from_file():
             item.get("entrades", ""),
             item.get("horari", ""),
             item.get("enlla_os", ""),
-            imatges,  # ✅ URL completa aquí
+            imatges,  # URL completa aquí
             item.get("adre_a", ""),
             item.get("comarca_i_municipi", ""),
             item.get("espai", ""),
@@ -188,6 +167,46 @@ def api_events():
         ORDER BY created_at DESC
         LIMIT ? OFFSET ?
     """, (per_page, offset))
+    rows = c.fetchall()
+    conn.close()
+
+    events = []
+    for r in rows:
+        events.append({
+            "id": r["id"],
+            "denominacio": r["denominacio"],
+            "descripcio": r["descripcio"],
+            "imatges": r["imatges"],
+            "data_inici": r["data_inici"],
+            "data_fi": r["data_fi"],
+            "horari": r["horari"],
+            "comarca_i_municipi": r["comarca_i_municipi"],
+            "espai": r["espai"],
+            "entrades": r["entrades"],
+            "url": r["url"],
+        })
+    return jsonify({"events": events})
+
+# --- API DE BÚSQUEDA ---
+@app.route("/api/search")
+def api_search():
+    query = request.args.get("q", "").strip().lower()
+    if not query:
+        return jsonify({"events": []})
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, denominacio, descripcio, imatges, data_inici, data_fi,
+               horari, comarca_i_municipi, espai, entrades, url
+        FROM events
+        WHERE LOWER(denominacio) LIKE ? 
+           OR LOWER(descripcio) LIKE ?
+           OR LOWER(comarca_i_municipi) LIKE ?
+           OR LOWER(espai) LIKE ?
+        ORDER BY created_at DESC
+        LIMIT 100
+    """, (f"%{query}%", f"%{query}%", f"%{query}%", f"%{query}%"))
     rows = c.fetchall()
     conn.close()
 

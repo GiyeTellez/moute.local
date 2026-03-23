@@ -1,20 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h2 class="mb-4">Actualizar Base de Datos desde JSON</h2>
+<h2 class="mb-4 section-title">Actualizar Base de Datos desde JSON</h2>
 
-<div class="card shadow-sm p-4">
-
+<div class="card shadow-sm p-4 border-0 rounded-3">
     <form action="{{ url_for('update_db_from_file') }}" method="POST" enctype="multipart/form-data">
-
         <div class="mb-3">
-            <label class="form-label">Selecciona un archivo JSON:</label>
+            <label class="form-label fw-bold">Selecciona un archivo JSON:</label>
             <input type="file" class="form-control" name="jsonfile" accept=".json,.jsonld" required>
         </div>
 
-        <button class="btn btn-primary">Subir y Actualizar</button>
+        <button class="btn btn-primary">
+            <i class="fas fa-upload me-2"></i>Subir y Actualizar
+        </button>
     </form>
-
 </div>
 
 {% endblock %}

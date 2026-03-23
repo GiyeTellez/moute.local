@@ -5,7 +5,7 @@
     <h1 class="mb-4 section-title">{{ title }}</h1>
     
     <!-- Barra de búsqueda -->
-    <input type="text" id="searchInput" class="form-control mb-3 search-input" placeholder="Buscar eventos...">
+    <input type="text" id="searchInput" class="form-control mb-3 search-input" placeholder="Buscar en todos los eventos...">
     
     <div class="row" id="eventsContainer"></div>
     
@@ -14,18 +14,81 @@
         <div class="spinner-border" role="status" style="color: #7e57c2;">
             <span class="visually-hidden">Loading...</span>
         </div>
-        <p class="mt-2">Cargando más eventos...</p>
+        <p class="mt-2">Cargando eventos...</p>
+    </div>
+    
+    <!-- Mensaje de búsqueda -->
+    <div id="searchMessage" class="alert alert-info text-center" style="display:none; margin-top: 20px;">
+        <i class="fas fa-search me-2"></i>Mostrando resultados para: <strong id="searchTerm"></strong>
+        <button id="clearSearch" class="btn btn-sm btn-outline-secondary ms-3">
+            <i class="fas fa-times me-1"></i>Limpiar búsqueda
+        </button>
     </div>
 </div>
 
 <script>
 let page = 1;
 let loading = false;
+let isSearching = false;
 let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
 favorites = favorites.map(id => String(id));
 
+// --------------------------------------------------
+// Crear tarjeta de evento (reutilizable)
+// --------------------------------------------------
+function createEventCard(event) {
+    let imageUrl = event.imatges || '';
+    if (imageUrl.trim().startsWith('/')) {
+        imageUrl = 'https://agenda.cultura.gencat.cat' + imageUrl.trim();
+    }
+
+    const card = document.createElement("div");
+    card.className = "col-md-4 mb-4";
+    card.innerHTML = `
+        <div class="card h-100 shadow-sm border-0 rounded-3 overflow-hidden">
+            <a href="/event/${event.id}" class="text-decoration-none d-block">
+                ${imageUrl ? `
+                    <img src="${imageUrl}" 
+                         class="card-img-top" 
+                         alt="${event.denominacio}" 
+                         style="height: 200px; object-fit: cover; width: 100%;"
+                         onerror="this.src='https://via.placeholder.com/300x200/e0d5f7/6a1b9a?text=Sin+Imagen'">
+                ` : `
+                    <div style="height: 200px; background: linear-gradient(135deg, #e0d5f7, #7e57c2); display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-image fa-3x text-white-50"></i>
+                    </div>
+                `}
+            </a>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="card-title fw-bold mb-0">
+                        <a href="/event/${event.id}" class="text-dark text-decoration-none">${event.denominacio}</a>
+                    </h5>
+                    <button class="btn btn-link p-0 favorite-btn" data-id="${event.id}">
+                        <i class="far fa-heart fa-lg"></i>
+                    </button>
+                </div>
+                <p class="text-muted small mb-3">${event.descripcio ? event.descripcio.substring(0, 80) + '...' : ''}</p>
+                
+                <div class="d-flex align-items-center mb-2">
+                    <i class="fas fa-calendar-alt me-2" style="color:#7e57c2;"></i>
+                    <small>${event.data_inici ? event.data_inici.split('T')[0] : 'Sin fecha'}</small>
+                </div>
+                <div class="d-flex align-items-center mb-2">
+                    <i class="fas fa-map-marker-alt me-2" style="color:#7e57c2;"></i>
+                    <small>${event.comarca_i_municipi ? event.comarca_i_municipi.split('/').pop() : 'Sin ubicación'}</small>
+                </div>
+            </div>
+        </div>
+    `;
+    return card;
+}
+
+// --------------------------------------------------
+// Cargar eventos normales (scroll infinito)
+// --------------------------------------------------
 async function loadEvents() {
-    if (loading) return;
+    if (loading || isSearching) return;
     loading = true;
     document.getElementById("loading").style.display = "block";
 
@@ -35,80 +98,99 @@ async function loadEvents() {
         document.getElementById("loading").style.display = "none";
         loading = false;
 
-        if (data.events.length === 0) return;
-
-        const container = document.getElementById("eventsContainer");
-
-        data.events.forEach(event => {
-            // ✅ Usar directamente la URL completa (ya corregida en backend)
-            let imageUrl = event.imatges || '';
-            
-            const card = document.createElement("div");
-            card.className = "col-md-4 mb-4";
-            card.innerHTML = `
-                <div class="card h-100 shadow-sm border-0 rounded-3 overflow-hidden">
-                    <a href="/event/${event.id}" class="text-decoration-none d-block">
-                        ${imageUrl ? `
-                            <img src="${imageUrl}" 
-                                 class="card-img-top" 
-                                 alt="${event.denominacio}" 
-                                 style="height: 200px; object-fit: cover; width: 100%;"
-                                 onerror="this.src='https://via.placeholder.com/300x200/e0d5f7/6a1b9a?text=Sin+Imagen'">
-                        ` : `
-                            <div style="height: 200px; background: linear-gradient(135deg, #e0d5f7, #7e57c2); display: flex; align-items: center; justify-content: center;">
-                                <i class="fas fa-image fa-3x text-white-50"></i>
-                            </div>
-                        `}
-                    </a>
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h5 class="card-title fw-bold mb-0">
-                                <a href="/event/${event.id}" class="text-dark text-decoration-none">${event.denominacio}</a>
-                            </h5>
-                            <button class="btn btn-link p-0 favorite-btn" data-id="${event.id}">
-                                <i class="far fa-heart fa-lg"></i>
-                            </button>
-                        </div>
-                        <p class="text-muted small mb-3">${event.descripcio ? event.descripcio.substring(0, 80) + '...' : ''}</p>
-                        
-                        <div class="d-flex align-items-center mb-2">
-                            <i class="fas fa-calendar-alt me-2" style="color:#7e57c2;"></i>
-                            <small>${event.data_inici ? event.data_inici.split('T')[0] : 'Sin fecha'}</small>
-                        </div>
-                        <div class="d-flex align-items-center mb-2">
-                            <i class="fas fa-map-marker-alt me-2" style="color:#7e57c2;"></i>
-                            <small>${event.comarca_i_municipi ? event.comarca_i_municipi.split('/').pop() : 'Sin ubicación'}</small>
+        if (data.events.length === 0) {
+            if (page === 1) {
+                document.getElementById("eventsContainer").innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-warning text-center">
+                            No hay eventos disponibles. Sube un archivo JSON desde la página de actualización.
                         </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
+            return;
+        }
+
+        const container = document.getElementById("eventsContainer");
+        data.events.forEach(event => {
+            const card = createEventCard(event);
             container.appendChild(card);
         });
 
         updateFavoriteButtons();
         page++;
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error cargando eventos:', error);
         document.getElementById("loading").style.display = "none";
         loading = false;
     }
 }
 
-// ... (el resto del script: scroll infinito, búsqueda, favoritos - SIN CAMBIOS)
-window.addEventListener("scroll", () => {
-    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 300 && !loading) {
-        loadEvents();
+// --------------------------------------------------
+// Buscar eventos en toda la base de datos (AJAX)
+// --------------------------------------------------
+async function searchEvents(query) {
+    if (!query.trim()) {
+        resetToNormalView();
+        return;
     }
-});
 
-document.getElementById("searchInput").addEventListener("input", function() {
-    const filter = this.value.toLowerCase();
-    document.querySelectorAll('.col-md-4').forEach(card => {
-        const text = card.textContent.toLowerCase();
-        card.style.display = text.includes(filter) ? "" : "none";
-    });
-});
+    isSearching = true;
+    loading = true;
+    document.getElementById("loading").style.display = "block";
+    document.getElementById("eventsContainer").innerHTML = "";
 
+    try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        document.getElementById("loading").style.display = "none";
+        loading = false;
+
+        const container = document.getElementById("eventsContainer");
+        container.innerHTML = "";
+
+        if (data.events.length === 0) {
+            container.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-search fa-2x mb-3"></i>
+                        <h5>No se encontraron eventos</h5>
+                        <p>No hay eventos que coincidan con "<strong>${query}</strong>".</p>
+                    </div>
+                </div>
+            `;
+            document.getElementById("searchMessage").style.display = "none";
+        } else {
+            data.events.forEach(event => {
+                const card = createEventCard(event);
+                container.appendChild(card);
+            });
+            document.getElementById("searchTerm").textContent = query;
+            document.getElementById("searchMessage").style.display = "block";
+        }
+
+        updateFavoriteButtons();
+    } catch (error) {
+        console.error('Error en búsqueda:', error);
+        document.getElementById("loading").style.display = "none";
+        loading = false;
+    }
+}
+
+// --------------------------------------------------
+// Resetear a vista normal (sin búsqueda)
+// --------------------------------------------------
+function resetToNormalView() {
+    isSearching = false;
+    page = 1;
+    document.getElementById("eventsContainer").innerHTML = "";
+    document.getElementById("searchMessage").style.display = "none";
+    loadEvents();
+}
+
+// --------------------------------------------------
+// Gestión de favoritos
+// --------------------------------------------------
 function toggleFavorite(eventId) {
     eventId = String(eventId);
     if (favorites.includes(eventId)) {
@@ -136,6 +218,29 @@ function updateFavoriteButtons() {
     });
 }
 
+// --------------------------------------------------
+// Event listeners
+// --------------------------------------------------
+document.getElementById("searchInput").addEventListener("input", function(e) {
+    const query = e.target.value.trim();
+    if (query.length >= 2) {
+        searchEvents(query);
+    } else if (query.length === 0) {
+        resetToNormalView();
+    }
+});
+
+document.getElementById("clearSearch").addEventListener("click", function() {
+    document.getElementById("searchInput").value = "";
+    resetToNormalView();
+});
+
+window.addEventListener("scroll", () => {
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 300 && !loading && !isSearching) {
+        loadEvents();
+    }
+});
+
 document.addEventListener('click', function(e) {
     const btn = e.target.closest('.favorite-btn');
     if (btn) {
@@ -144,6 +249,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// Cargar primera página al iniciar
 loadEvents();
 </script>
 {% endblock %}
