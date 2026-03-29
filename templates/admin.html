@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="section-title mb-0">Panel de Administración</h1>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
+                <i class="fas fa-sign-out-alt me-1"></i>Cerrar Sesión
+            </a>
+        </div>
+    </div>
+
+    <!-- Mensajes flash -->
+    {% with msgs = get_flashed_messages(with_categories=True) %}
+    {% if msgs %}
+        {% for cat, msg in msgs %}
+        <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <!-- Estadísticas generales -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center p-4">
+                    <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px; background: linear-gradient(135deg, #e0d5f7, #7e57c2);">
+                        <i class="fas fa-calendar-check fa-2x" style="color: #6a1b9a;"></i>
+                    </div>
+                    <h3 class="fw-bold mt-3 mb-1" style="color: #6a1b9a;">{{ stats.total_events }}</h3>
+                    <p class="text-muted mb-0">Total de Eventos</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center p-4">
+                    <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px; background: linear-gradient(135deg, #e0d5f7, #7e57c2);">
+                        <i class="fas fa-clock fa-2x" style="color: #6a1b9a;"></i>
+                    </div>
+                    <h3 class="fw-bold mt-3 mb-1" style="color: #6a1b9a;">{{ stats.upcoming_events }}</h3>
+                    <p class="text-muted mb-0">Eventos Próximos</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center p-4">
+                    <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px; background: linear-gradient(135deg, #e0d5f7, #7e57c2);">
+                        <i class="fas fa-history fa-2x" style="color: #6a1b9a;"></i>
+                    </div>
+                    <h3 class="fw-bold mt-3 mb-1" style="color: #6a1b9a;">{{ stats.past_events }}</h3>
+                    <p class="text-muted mb-0">Eventos Pasados</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficas y estadísticas detalladas -->
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 pb-0">
+                    <h5 class="fw-bold mb-0">Eventos por Año</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 300px; overflow-y: auto;">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Año</th>
+                                    <th class="text-end">Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in stats.events_by_year %}
+                                <tr>
+                                    <td><strong>{{ item.year }}</strong></td>
+                                    <td class="text-end"><span class="badge bg-primary">{{ item.count }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 pb-0">
+                    <h5 class="fw-bold mb-0">Eventos por Comarca</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 300px; overflow-y: auto;">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Comarca</th>
+                                    <th class="text-end">Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in stats.events_by_region %}
+                                <tr>
+                                    <td><strong>{{ item.region }}</strong></td>
+                                    <td class="text-end"><span class="badge bg-success">{{ item.count }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 pb-0">
+                    <h5 class="fw-bold mb-0">Eventos por Categoría</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 300px; overflow-y: auto;">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th class="text-end">Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in stats.events_by_category %}
+                                <tr>
+                                    <td><strong>{{ item.category }}</strong></td>
+                                    <td class="text-end"><span class="badge bg-info">{{ item.count }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 pb-0">
+                    <h5 class="fw-bold mb-0">Eventos Gratuitos vs de Pago</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 300px; overflow-y: auto;">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th class="text-end">Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in stats.events_by_price %}
+                                <tr>
+                                    <td><strong>{{ item.type }}</strong></td>
+                                    <td class="text-end"><span class="badge bg-warning text-dark">{{ item.count }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Últimos eventos añadidos -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pb-0">
+            <h5 class="fw-bold mb-0">Últimos Eventos Añadidos</h5>
+        </div>
+        <div class="card-body">
+            <div style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Evento</th>
+                            <th>Fecha</th>
+                            <th>Añadido</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in stats.recent_events %}
+                        <tr>
+                            <td><code>{{ event.id }}</code></td>
+                            <td><strong>{{ event.denominacio }}</strong></td>
+                            <td>{{ event.data_inici.split('T')[0] if event.data_inici else 'Sin fecha' }}</td>
+                            <td><small class="text-muted">{{ event.created_at.split('T')[0] if event.created_at else '' }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Acciones rápidas -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 pb-0">
+            <h5 class="fw-bold mb-0">Acciones Rápidas</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <a href="{{ url_for('update_events_page') }}" class="btn btn-primary w-100">
+                        <i class="fas fa-upload me-2"></i>Actualizar Base de Datos
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <a href="{{ url_for('change_password') }}" class="btn btn-warning w-100">
+                        <i class="fas fa-key me-2"></i>Cambiar Contraseña
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <a href="{{ url_for('events') }}" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-arrow-left me-2"></i>Volver a Eventos
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

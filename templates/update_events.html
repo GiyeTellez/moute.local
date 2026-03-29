@@ -1,19 +1,37 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h2 class="mb-4 section-title">Actualizar Base de Datos desde JSON</h2>
+<div class="container my-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="section-title mb-0">Actualizar Base de Datos desde JSON</h2>
+        <a href="{{ url_for('admin_panel') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>Volver al Panel
+        </a>
+    </div>
 
-<div class="card shadow-sm p-4 border-0 rounded-3">
-    <form action="{{ url_for('update_db_from_file') }}" method="POST" enctype="multipart/form-data">
-        <div class="mb-3">
-            <label class="form-label fw-bold">Selecciona un archivo JSON:</label>
-            <input type="file" class="form-control" name="jsonfile" accept=".json,.jsonld" required>
+    <div class="card shadow-sm p-4 border-0 rounded-3">
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Importante:</strong> Esta acción añadirá nuevos eventos a la base de datos. Los eventos que ya existan no se duplicarán.
         </div>
+        
+        <form action="{{ url_for('update_db_from_file') }}" method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label fw-bold">Selecciona un archivo JSON:</label>
+                <input type="file" class="form-control" name="jsonfile" accept=".json,.jsonld" required>
+                <small class="text-muted">Formatos aceptados: .json, .jsonld</small>
+            </div>
 
-        <button class="btn btn-primary">
-            <i class="fas fa-upload me-2"></i>Subir y Actualizar
-        </button>
-    </form>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <a href="{{ url_for('admin_panel') }}" class="btn btn-outline-secondary me-md-2">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-upload me-1"></i>Subir y Actualizar
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
 
 {% endblock %}

@@ -1,11 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 import os
 import json
 import sqlite3
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = "clave-secreta-moute"
+app.secret_key = "clave-secreta-moute-2026"
 
 # -----------------------------
 # Directorio base y rutas
@@ -23,6 +24,234 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
+# -----------------------------
+# Inicializar base de datos (crear tablas si no existen)
+# -----------------------------
+def init_db():
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Tabla de administradores
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS admins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            email TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Insertar admin por defecto si no existe
+    c.execute("SELECT COUNT(*) FROM admins WHERE username = 'admin'")
+    if c.fetchone()[0] == 0:
+        default_password = "admin123"
+        password_hash = generate_password_hash(default_password)
+        c.execute("""
+            INSERT INTO admins (username, password_hash, email) 
+            VALUES (?, ?, ?)
+        """, ("admin", password_hash, "admin@moute.com"))
+        print(f"✅ Usuario admin creado con contraseña: {default_password}")
+        print("⚠️  ¡Cambia la contraseña por defecto en el panel de administración!")
+    
+    conn.commit()
+    conn.close()
+
+# -----------------------------
+# Decorador para requerir login de admin
+# -----------------------------
+def admin_required(f):
+    def wrap(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            flash("Debes iniciar sesión como administrador para acceder a esta página.", "warning")
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    wrap.__name__ = f.__name__
+    return wrap
+
+# -----------------------------
+# Ejecutar inicialización al iniciar la app
+# -----------------------------
+with app.app_context():
+    init_db()
+
+# ============================
+# LOGIN Y LOGOUT
+# ============================
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get('admin_logged_in'):
+        return redirect(url_for('events'))
+    
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT id, username, password_hash FROM admins WHERE username = ?", (username,))
+        admin = c.fetchone()
+        conn.close()
+        
+        if admin and check_password_hash(admin["password_hash"], password):
+            session['admin_logged_in'] = True
+            session['admin_id'] = admin["id"]
+            session['admin_username'] = admin["username"]
+            flash("¡Inicio de sesión exitoso!", "success")
+            return redirect(url_for('events'))
+        else:
+            flash("Usuario o contraseña incorrectos.", "danger")
+            return redirect(url_for('login'))
+    
+    return render_template("login.html", title="Iniciar Sesión")
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Sesión cerrada correctamente.", "info")
+    return redirect(url_for('events'))
+
+# ============================
+# CAMBIAR CONTRASEÑA
+# ============================
+@app.route("/admin/change-password", methods=["GET", "POST"])
+@admin_required
+def change_password():
+    if request.method == "POST":
+        current_password = request.form.get("current_password")
+        new_password = request.form.get("new_password")
+        confirm_password = request.form.get("confirm_password")
+        
+        if not current_password or not new_password or not confirm_password:
+            flash("Todos los campos son obligatorios.", "warning")
+            return redirect(url_for('change_password'))
+        
+        if new_password != confirm_password:
+            flash("Las nuevas contraseñas no coinciden.", "danger")
+            return redirect(url_for('change_password'))
+        
+        if len(new_password) < 6:
+            flash("La nueva contraseña debe tener al menos 6 caracteres.", "warning")
+            return redirect(url_for('change_password'))
+        
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT password_hash FROM admins WHERE id = ?", (session['admin_id'],))
+        admin = c.fetchone()
+        
+        if not check_password_hash(admin["password_hash"], current_password):
+            conn.close()
+            flash("La contraseña actual es incorrecta.", "danger")
+            return redirect(url_for('change_password'))
+        
+        new_password_hash = generate_password_hash(new_password)
+        c.execute("UPDATE admins SET password_hash = ? WHERE id = ?", (new_password_hash, session['admin_id']))
+        conn.commit()
+        conn.close()
+        
+        flash("¡Contraseña cambiada exitosamente!", "success")
+        return redirect(url_for('admin_panel'))
+    
+    return render_template("change_password.html", title="Cambiar Contraseña")
+
+# ============================
+# PANEL DE ADMINISTRACIÓN (CORREGIDO)
+# ============================
+@app.route("/admin")
+@admin_required
+def admin_panel():
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Estadísticas generales
+    c.execute("SELECT COUNT(*) FROM events")
+    total_events = c.fetchone()[0]
+    
+    c.execute("SELECT COUNT(*) FROM events WHERE data_inici >= date('now')")
+    upcoming_events = c.fetchone()[0]
+    
+    c.execute("SELECT COUNT(*) FROM events WHERE data_inici < date('now')")
+    past_events = c.fetchone()[0]
+    
+    # Eventos por año
+    c.execute("""
+        SELECT strftime('%Y', data_inici) as year, COUNT(*) as count
+        FROM events
+        WHERE data_inici IS NOT NULL
+        GROUP BY year
+        ORDER BY year DESC
+        LIMIT 10
+    """)
+    events_by_year = []
+    for row in c.fetchall():
+        events_by_year.append({"year": row["year"], "count": row["count"]})
+    
+    # Eventos por comarca/municipio (usando la columna que existe)
+    c.execute("""
+        SELECT 
+            CASE 
+                WHEN comarca_i_municipi LIKE '%barcelona%' THEN 'Barcelona'
+                WHEN comarca_i_municipi LIKE '%girona%' THEN 'Girona'
+                WHEN comarca_i_municipi LIKE '%lleida%' THEN 'Lleida'
+                WHEN comarca_i_municipi LIKE '%tarragona%' THEN 'Tarragona'
+                ELSE 'Otras'
+            END as region,
+            COUNT(*) as count
+        FROM events
+        WHERE comarca_i_municipi IS NOT NULL
+        GROUP BY region
+        ORDER BY count DESC
+    """)
+    events_by_region = []
+    for row in c.fetchall():
+        events_by_region.append({"region": row["region"], "count": row["count"]})
+    
+    # Eventos gratuitos vs pagos (simplificado)
+    c.execute("""
+        SELECT 
+            CASE 
+                WHEN entrades LIKE '%gratuit%' OR entrades LIKE '%gratis%' THEN 'Gratuitos'
+                ELSE 'De pago'
+            END as type,
+            COUNT(*) as count
+        FROM events
+        GROUP BY type
+    """)
+    events_by_price = []
+    for row in c.fetchall():
+        events_by_price.append({"type": row["type"], "count": row["count"]})
+    
+    # Últimos 5 eventos añadidos
+    c.execute("""
+        SELECT id, denominacio, data_inici, created_at
+        FROM events
+        ORDER BY created_at DESC
+        LIMIT 5
+    """)
+    recent_events = []
+    for row in c.fetchall():
+        recent_events.append({
+            "id": row["id"], 
+            "denominacio": row["denominacio"], 
+            "data_inici": row["data_inici"], 
+            "created_at": row["created_at"]
+        })
+    
+    conn.close()
+    
+    stats = {
+        "total_events": total_events,
+        "upcoming_events": upcoming_events,
+        "past_events": past_events,
+        "events_by_year": events_by_year,
+        "events_by_region": events_by_region,
+        "events_by_category": [],
+        "events_by_price": events_by_price,
+        "recent_events": recent_events
+    }
+    
+    return render_template("admin.html", title="Panel de Administración", stats=stats)
+
 # ============================
 # LISTAR EVENTOS
 # ============================
@@ -30,6 +259,60 @@ def get_db():
 @app.route("/events")
 def events():
     return render_template("events.html", title="Eventos")
+
+# ============================
+# CALENDARIO DE EVENTOS
+# ============================
+@app.route("/calendar")
+def calendar():
+    return render_template("calendar.html", title="Calendario de Eventos")
+
+# --- API para obtener eventos por mes ---
+@app.route("/api/events-by-month")
+def api_events_by_month():
+    year = request.args.get("year", type=int)
+    month = request.args.get("month", type=int)
+    
+    if not year or not month:
+        from datetime import datetime
+        now = datetime.now()
+        year = now.year
+        month = now.month
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Obtener primer y último día del mes
+    import calendar as cal
+    last_day = cal.monthrange(year, month)[1]
+    start_date = f"{year}-{month:02d}-01"
+    end_date = f"{year}-{month:02d}-{last_day}"
+    
+    c.execute("""
+        SELECT id, denominacio, data_inici, data_fi, imatges
+        FROM events
+        WHERE data_inici BETWEEN ? AND ?
+        ORDER BY data_inici
+    """, (start_date, end_date))
+    
+    events = []
+    for r in c.fetchall():
+        events.append({
+            "id": r["id"],
+            "denominacio": r["denominacio"],
+            "data_inici": r["data_inici"],
+            "data_fi": r["data_fi"],
+            "imatges": r["imatges"],
+            "day": int(r["data_inici"].split("T")[0].split("-")[2]) if r["data_inici"] else None
+        })
+    
+    conn.close()
+    
+    return jsonify({
+        "year": year,
+        "month": month,
+        "events": events
+    })
 
 # ============================
 # PÁGINA DE DETALLE DE EVENTO
@@ -50,9 +333,10 @@ def event_detail(event_id):
     return render_template("event_detail.html", event=event_dict)
 
 # ============================
-# PÁGINA DE ACTUALIZACIÓN
+# PÁGINA DE ACTUALIZACIÓN (protegida)
 # ============================
 @app.route("/update")
+@admin_required
 def update_events_page():
     return render_template("update_events.html", title="Actualizar BD")
 
@@ -60,6 +344,7 @@ def update_events_page():
 # PROCESAR JSON SUBIDO
 # ============================
 @app.route("/update_db", methods=["POST"])
+@admin_required
 def update_db_from_file():
     if "jsonfile" not in request.files:
         flash("No has subido ningún archivo.", "danger")
@@ -95,13 +380,10 @@ def update_db_from_file():
         if c.fetchone()[0] > 0:
             continue
 
-        # CORRECCIÓN CLAVE: Extraer PRIMERA imagen y construir URL completa
         imatges_raw = item.get("imatges", "").strip()
         imatges = ""
         if imatges_raw:
-            # Tomar solo la primera imagen (separadas por comas)
             first_image = imatges_raw.split(",")[0].strip()
-            # Añadir dominio base si es ruta relativa
             if first_image.startswith("/"):
                 imatges = "https://agenda.cultura.gencat.cat" + first_image
             elif first_image.startswith("http"):
@@ -131,7 +413,7 @@ def update_db_from_file():
             item.get("entrades", ""),
             item.get("horari", ""),
             item.get("enlla_os", ""),
-            imatges,  # URL completa aquí
+            imatges,
             item.get("adre_a", ""),
             item.get("comarca_i_municipi", ""),
             item.get("espai", ""),
@@ -149,7 +431,7 @@ def update_db_from_file():
     conn.commit()
     conn.close()
     flash(f"{nuevos} nuevos eventos añadidos.", "success")
-    return redirect(url_for("events"))
+    return redirect(url_for("admin_panel"))
 
 # --- API PAGINADA ---
 @app.route("/api/events")
