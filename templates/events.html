@@ -4,8 +4,76 @@
 <div class="container my-4">
     <h1 class="mb-4 section-title">{{ title }}</h1>
     
-    <!-- Barra de búsqueda -->
-    <input type="text" id="searchInput" class="form-control mb-3 search-input" placeholder="Buscar en todos los eventos...">
+    <!-- Panel de filtros -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <!-- Búsqueda general -->
+                <div class="col-12 col-md-6">
+                    <label for="searchInput" class="form-label fw-bold">Buscar eventos</label>
+                    <input type="text" id="searchInput" class="form-control search-input" placeholder="Título, descripción, ubicación...">
+                </div>
+                
+                <!-- Rango de fechas -->
+                <div class="col-12 col-md-3">
+                    <label for="dateFrom" class="form-label fw-bold">Desde</label>
+                    <input type="date" id="dateFrom" class="form-control">
+                </div>
+                
+                <div class="col-12 col-md-3">
+                    <label for="dateTo" class="form-label fw-bold">Hasta</label>
+                    <input type="date" id="dateTo" class="form-control">
+                </div>
+                
+                <!-- Filtro por precio -->
+                <div class="col-12 col-md-4">
+                    <label for="priceFilter" class="form-label fw-bold">Precio</label>
+                    <select id="priceFilter" class="form-select">
+                        <option value="">Todos los precios</option>
+                        <option value="free">Gratuitos</option>
+                        <option value="paid">De pago</option>
+                    </select>
+                </div>
+                
+                <!-- Filtro por categoría -->
+                <div class="col-12 col-md-5">
+                    <label for="categoryFilter" class="form-label fw-bold">Categoría</label>
+                    <select id="categoryFilter" class="form-select">
+                        <option value="">Todas las categorías</option>
+                        <option value="teatre">Teatre</option>
+                        <option value="musica">Música</option>
+                        <option value="exposicions">Exposicions</option>
+                        <option value="dansa">Dansa</option>
+                        <option value="cinema">Cinema</option>
+                        <option value="literatura">Llibres i Lletres</option>
+                        <option value="gastronomia">Gastronomia</option>
+                        <option value="arts_visuals">Arts visuals</option>
+                        <option value="tradicional">Tradicional i Popular</option>
+                        <option value="familiar">Familiar</option>
+                    </select>
+                </div>
+                
+                <!-- Botones de control -->
+                <div class="col-12 col-md-3 d-flex align-items-end">
+                    <button id="applyFilters" class="btn btn-primary w-100 me-2">
+                        <i class="fas fa-filter me-1"></i>Filtrar
+                    </button>
+                    <button id="clearAllFilters" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-times me-1"></i>Limpiar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Mensaje de filtros aplicados -->
+    <div id="filtersMessage" class="alert alert-info text-center" style="display:none; margin-bottom: 20px;">
+        <i class="fas fa-filter me-2"></i>
+        <span id="filtersText"></span>
+        <button id="clearFiltersBtn" class="btn btn-sm btn-outline-secondary ms-3">
+            <i class="fas fa-times me-1"></i>Limpiar filtros
+        </button>
+    </div>
     
     <div class="row" id="eventsContainer"></div>
     
@@ -16,14 +84,6 @@
         </div>
         <p class="mt-2">Cargando eventos...</p>
     </div>
-    
-    <!-- Mensaje de búsqueda -->
-    <div id="searchMessage" class="alert alert-info text-center" style="display:none; margin-top: 20px;">
-        <i class="fas fa-search me-2"></i>Mostrando resultados para: <strong id="searchTerm"></strong>
-        <button id="clearSearch" class="btn btn-sm btn-outline-secondary ms-3">
-            <i class="fas fa-times me-1"></i>Limpiar búsqueda
-        </button>
-    </div>
 </div>
 
 <script>
@@ -32,6 +92,15 @@ let loading = false;
 let isSearching = false;
 let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
 favorites = favorites.map(id => String(id));
+
+// Almacenar filtros actuales
+let currentFilters = {
+    query: '',
+    dateFrom: '',
+    dateTo: '',
+    price: '',
+    category: ''
+};
 
 // --------------------------------------------------
 // Crear tarjeta de evento (reutilizable)
@@ -78,6 +147,14 @@ function createEventCard(event) {
                     <i class="fas fa-map-marker-alt me-2" style="color:#7e57c2;"></i>
                     <small>${event.comarca_i_municipi ? event.comarca_i_municipi.split('/').pop() : 'Sin ubicación'}</small>
                 </div>
+                
+                <!-- Badge de precio -->
+                <div class="mt-2">
+                    ${event.entrades && (event.entrades.toLowerCase().includes('gratuit') || event.entrades.toLowerCase().includes('gratis') || event.entrades.toLowerCase().includes('gratuïta')) ? 
+                        '<span class="badge bg-success">Gratuito</span>' : 
+                        '<span class="badge bg-warning text-dark">De pago</span>'
+                    }
+                </div>
             </div>
         </div>
     `;
@@ -85,15 +162,97 @@ function createEventCard(event) {
 }
 
 // --------------------------------------------------
-// Cargar eventos normales (scroll infinito)
+// Aplicar filtros
+// --------------------------------------------------
+function applyFilters() {
+    currentFilters.query = document.getElementById('searchInput').value.trim();
+    currentFilters.dateFrom = document.getElementById('dateFrom').value;
+    currentFilters.dateTo = document.getElementById('dateTo').value;
+    currentFilters.price = document.getElementById('priceFilter').value;
+    currentFilters.category = document.getElementById('categoryFilter').value;
+    
+    // Mostrar mensaje de filtros aplicados
+    updateFiltersMessage();
+    
+    // Reiniciar y cargar eventos con filtros
+    resetToNormalView();
+}
+
+// --------------------------------------------------
+// Actualizar mensaje de filtros
+// --------------------------------------------------
+function updateFiltersMessage() {
+    const filters = [];
+    
+    if (currentFilters.query) filters.push(`Búsqueda: "${currentFilters.query}"`);
+    if (currentFilters.dateFrom) filters.push(`Desde: ${currentFilters.dateFrom}`);
+    if (currentFilters.dateTo) filters.push(`Hasta: ${currentFilters.dateTo}`);
+    if (currentFilters.price === 'free') filters.push('Gratis');
+    if (currentFilters.price === 'paid') filters.push('De pago');
+    if (currentFilters.category) {
+        const categoryNames = {
+            'teatre': 'Teatre',
+            'musica': 'Música', 
+            'exposicions': 'Exposicions',
+            'dansa': 'Dansa',
+            'cinema': 'Cinema',
+            'literatura': 'Llibres i Lletres',
+            'gastronomia': 'Gastronomia',
+            'arts_visuals': 'Arts visuals',
+            'tradicional': 'Tradicional',
+            'familiar': 'Familiar'
+        };
+        filters.push(`Categoría: ${categoryNames[currentFilters.category] || currentFilters.category}`);
+    }
+    
+    if (filters.length > 0) {
+        document.getElementById('filtersText').textContent = filters.join(' | ');
+        document.getElementById('filtersMessage').style.display = 'block';
+    } else {
+        document.getElementById('filtersMessage').style.display = 'none';
+    }
+}
+
+// --------------------------------------------------
+// Limpiar todos los filtros
+// --------------------------------------------------
+function clearAllFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('dateFrom').value = '';
+    document.getElementById('dateTo').value = '';
+    document.getElementById('priceFilter').value = '';
+    document.getElementById('categoryFilter').value = '';
+    
+    currentFilters = {
+        query: '',
+        dateFrom: '',
+        dateTo: '',
+        price: '',
+        category: ''
+    };
+    
+    document.getElementById('filtersMessage').style.display = 'none';
+    resetToNormalView();
+}
+
+// --------------------------------------------------
+// Cargar eventos con filtros (scroll infinito)
 // --------------------------------------------------
 async function loadEvents() {
-    if (loading || isSearching) return;
+    if (loading) return;
     loading = true;
     document.getElementById("loading").style.display = "block";
 
     try {
-        const response = await fetch(`/api/events?page=${page}`);
+        // Construir URL con parámetros de filtrado
+        let url = `/api/events?page=${page}`;
+        if (currentFilters.query) url += `&q=${encodeURIComponent(currentFilters.query)}`;
+        if (currentFilters.dateFrom) url += `&date_from=${currentFilters.dateFrom}`;
+        if (currentFilters.dateTo) url += `&date_to=${currentFilters.dateTo}`;
+        if (currentFilters.price) url += `&price=${currentFilters.price}`;
+        if (currentFilters.category) url += `&category=${currentFilters.category}`;
+
+        const response = await fetch(url);
         const data = await response.json();
         document.getElementById("loading").style.display = "none";
         loading = false;
@@ -103,7 +262,7 @@ async function loadEvents() {
                 document.getElementById("eventsContainer").innerHTML = `
                     <div class="col-12">
                         <div class="alert alert-warning text-center">
-                            No hay eventos disponibles. Sube un archivo JSON desde la página de actualización.
+                            No se encontraron eventos con los filtros aplicados.
                         </div>
                     </div>
                 `;
@@ -127,64 +286,12 @@ async function loadEvents() {
 }
 
 // --------------------------------------------------
-// Buscar eventos en toda la base de datos (AJAX)
-// --------------------------------------------------
-async function searchEvents(query) {
-    if (!query.trim()) {
-        resetToNormalView();
-        return;
-    }
-
-    isSearching = true;
-    loading = true;
-    document.getElementById("loading").style.display = "block";
-    document.getElementById("eventsContainer").innerHTML = "";
-
-    try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-        const data = await response.json();
-        document.getElementById("loading").style.display = "none";
-        loading = false;
-
-        const container = document.getElementById("eventsContainer");
-        container.innerHTML = "";
-
-        if (data.events.length === 0) {
-            container.innerHTML = `
-                <div class="col-12">
-                    <div class="alert alert-info text-center">
-                        <i class="fas fa-search fa-2x mb-3"></i>
-                        <h5>No se encontraron eventos</h5>
-                        <p>No hay eventos que coincidan con "<strong>${query}</strong>".</p>
-                    </div>
-                </div>
-            `;
-            document.getElementById("searchMessage").style.display = "none";
-        } else {
-            data.events.forEach(event => {
-                const card = createEventCard(event);
-                container.appendChild(card);
-            });
-            document.getElementById("searchTerm").textContent = query;
-            document.getElementById("searchMessage").style.display = "block";
-        }
-
-        updateFavoriteButtons();
-    } catch (error) {
-        console.error('Error en búsqueda:', error);
-        document.getElementById("loading").style.display = "none";
-        loading = false;
-    }
-}
-
-// --------------------------------------------------
-// Resetear a vista normal (sin búsqueda)
+// Resetear a vista normal (sin búsqueda pero con filtros)
 // --------------------------------------------------
 function resetToNormalView() {
     isSearching = false;
     page = 1;
     document.getElementById("eventsContainer").innerHTML = "";
-    document.getElementById("searchMessage").style.display = "none";
     loadEvents();
 }
 
@@ -221,26 +328,29 @@ function updateFavoriteButtons() {
 // --------------------------------------------------
 // Event listeners
 // --------------------------------------------------
-document.getElementById("searchInput").addEventListener("input", function(e) {
-    const query = e.target.value.trim();
-    if (query.length >= 2) {
-        searchEvents(query);
-    } else if (query.length === 0) {
-        resetToNormalView();
+document.getElementById("applyFilters").addEventListener("click", applyFilters);
+document.getElementById("clearAllFilters").addEventListener("click", clearAllFilters);
+document.getElementById("clearFiltersBtn").addEventListener("click", clearAllFilters);
+
+// Aplicar filtros al presionar Enter en el campo de búsqueda
+document.getElementById("searchInput").addEventListener("keypress", function(e) {
+    if (e.key === "Enter") {
+        applyFilters();
     }
 });
 
-document.getElementById("clearSearch").addEventListener("click", function() {
-    document.getElementById("searchInput").value = "";
-    resetToNormalView();
-});
+// Aplicar filtros cuando cambian los selects
+document.getElementById("priceFilter").addEventListener("change", applyFilters);
+document.getElementById("categoryFilter").addEventListener("change", applyFilters);
 
+// Scroll infinito
 window.addEventListener("scroll", () => {
-    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 300 && !loading && !isSearching) {
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 300 && !loading) {
         loadEvents();
     }
 });
 
+// Favoritos
 document.addEventListener('click', function(e) {
     const btn = e.target.closest('.favorite-btn');
     if (btn) {

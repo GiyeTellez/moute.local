@@ -7,9 +7,9 @@
             <div class="card shadow-lg border-0 rounded-4">
                 <div class="card-body p-5">
                     <div class="text-center mb-4">
-                        <i class="fas fa-user-shield fa-3x mb-3" style="color: #7e57c2;"></i>
+                        <i class="fas fa-user-friends fa-3x mb-3" style="color: #7e57c2;"></i>
                         <h2 class="fw-bold">Iniciar Sesión</h2>
-                        <p class="text-muted">Panel de Administración</p>
+                        <p class="text-muted">Accede como administrador o como usuario</p>
                     </div>
                     
                     {% with msgs = get_flashed_messages(with_categories=True) %}
@@ -25,13 +25,14 @@
                     
                     <form method="POST" action="{{ url_for('login') }}">
                         <div class="mb-3">
-                            <label for="username" class="form-label fw-bold">Usuario</label>
+                            <label for="username" class="form-label fw-bold">Nombre de usuario</label>
                             <div class="input-group">
                                 <span class="input-group-text">
                                     <i class="fas fa-user"></i>
                                 </span>
-                                <input type="text" class="form-control" id="username" name="username" required autofocus>
+                                <input type="text" class="form-control" id="username" name="username" required autofocus placeholder="Ej: Maria, Juan, Admin...">
                             </div>
+                            <small class="text-muted">Si eres administrador, usa tu usuario y contraseña. Si no, cualquier nombre funcionará.</small>
                         </div>
                         
                         <div class="mb-4">
@@ -40,13 +41,13 @@
                                 <span class="input-group-text">
                                     <i class="fas fa-lock"></i>
                                 </span>
-                                <input type="password" class="form-control" id="password" name="password" required>
+                                <input type="password" class="form-control" id="password" name="password" required placeholder="Tu contraseña">
                             </div>
                         </div>
                         
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="fas fa-sign-in-alt me-2"></i>Iniciar Sesión
+                                <i class="fas fa-sign-in-alt me-2"></i>Acceder
                             </button>
                         </div>
                     </form>
@@ -54,13 +55,10 @@
                     <hr class="my-4">
                     
                     <div class="text-center">
-                        <p class="text-muted mb-0">
-                            <small>
-                                <strong>Credenciales por defecto:</strong><br>
-                                Usuario: <code>admin</code><br>
-                                Contraseña: <code>admin123</code>
-                            </small>
-                        </p>
+                        <small class="text-muted">
+                            <strong>Administrador:</strong> Usuario: admin | Contraseña: admin123<br>
+                            <strong>Usuario normal:</strong> Cualquier nombre y contraseña
+                        </small>
                     </div>
                 </div>
             </div>

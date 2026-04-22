@@ -76,17 +76,19 @@ with app.app_context():
     init_db()
 
 # ============================
-# LOGIN Y LOGOUT
+# LOGIN Y LOGOUT (ACTUALIZADO)
 # ============================
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if session.get('admin_logged_in'):
+    # Si ya hay sesión activa, redirigir a eventos
+    if session.get('logged_in'):
         return redirect(url_for('events'))
     
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
         
+        # Verificar si es admin
         conn = get_db()
         c = conn.cursor()
         c.execute("SELECT id, username, password_hash FROM admins WHERE username = ?", (username,))
@@ -94,14 +96,25 @@ def login():
         conn.close()
         
         if admin and check_password_hash(admin["password_hash"], password):
+            # Login como administrador
+            session['logged_in'] = True
             session['admin_logged_in'] = True
             session['admin_id'] = admin["id"]
             session['admin_username'] = admin["username"]
-            flash("¡Inicio de sesión exitoso!", "success")
+            session['username'] = admin["username"]
+            flash("¡Inicio de sesión como administrador exitoso!", "success")
             return redirect(url_for('events'))
         else:
-            flash("Usuario o contraseña incorrectos.", "danger")
-            return redirect(url_for('login'))
+            # Login como usuario normal (solo visual)
+            if username.strip():
+                session['logged_in'] = True
+                session['admin_logged_in'] = False
+                session['username'] = username.strip()
+                flash(f"¡Bienvenido, {username.strip()}!", "success")
+                return redirect(url_for('events'))
+            else:
+                flash("Por favor, introduce un nombre de usuario.", "warning")
+                return redirect(url_for('login'))
     
     return render_template("login.html", title="Iniciar Sesión")
 
@@ -206,11 +219,35 @@ def admin_panel():
     for row in c.fetchall():
         events_by_region.append({"region": row["region"], "count": row["count"]})
     
-    # Eventos gratuitos vs pagos (simplificado)
+    # Categorías de eventos
     c.execute("""
         SELECT 
             CASE 
-                WHEN entrades LIKE '%gratuit%' OR entrades LIKE '%gratis%' THEN 'Gratuitos'
+                WHEN tags_categories LIKE '%teatre%' THEN 'Teatro'
+                WHEN tags_categories LIKE '%musica%' THEN 'Música'
+                WHEN tags_categories LIKE '%exposicio%' OR tags_categories LIKE '%exposiciones%' THEN 'Exposiciones'
+                WHEN tags_categories LIKE '%dansa%' THEN 'Danza'
+                WHEN tags_categories LIKE '%cinema%' THEN 'Cine'
+                WHEN tags_categories LIKE '%llibres%' OR tags_categories LIKE '%literatura%' THEN 'Literatura'
+                WHEN tags_categories LIKE '%gastronomia%' THEN 'Gastronomía'
+                ELSE 'Otros'
+            END as category,
+            COUNT(*) as count
+        FROM events
+        WHERE tags_categories IS NOT NULL
+        GROUP BY category
+        ORDER BY count DESC
+        LIMIT 8
+    """)
+    events_by_category = []
+    for row in c.fetchall():
+        events_by_category.append({"category": row["category"], "count": row["count"]})
+    
+    # Eventos gratuitos vs pagos
+    c.execute("""
+        SELECT 
+            CASE 
+                WHEN entrades LIKE '%gratuit%' OR entrades LIKE '%gratis%' OR entrades LIKE '%gratuïta%' THEN 'Gratuitos'
                 ELSE 'De pago'
             END as type,
             COUNT(*) as count
@@ -245,7 +282,7 @@ def admin_panel():
         "past_events": past_events,
         "events_by_year": events_by_year,
         "events_by_region": events_by_region,
-        "events_by_category": [],
+        "events_by_category": events_by_category,
         "events_by_price": events_by_price,
         "recent_events": recent_events
     }
@@ -433,23 +470,91 @@ def update_db_from_file():
     flash(f"{nuevos} nuevos eventos añadidos.", "success")
     return redirect(url_for("admin_panel"))
 
-# --- API PAGINADA ---
+# --- API PAGINADA CON FILTROS ---
 @app.route("/api/events")
 def api_events():
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 20))
     offset = (page - 1) * per_page
-
+    
+    # Parámetros de filtrado
+    query = request.args.get("q", "").strip().lower()
+    date_from = request.args.get("date_from", "")
+    date_to = request.args.get("date_to", "")
+    price_filter = request.args.get("price", "")
+    category_filter = request.args.get("category", "")
+    
     conn = get_db()
     c = conn.cursor()
-    c.execute("""
+    
+    # Construir consulta base
+    base_query = """
         SELECT id, denominacio, descripcio, imatges, data_inici, data_fi,
-               horari, comarca_i_municipi, espai, entrades, url
+               horari, comarca_i_municipi, espai, entrades, url, tags_categories
         FROM events
-        ORDER BY created_at DESC
-        LIMIT ? OFFSET ?
-    """, (per_page, offset))
+    """
+    
+    conditions = []
+    params = []
+    
+    # Filtro de búsqueda general
+    if query:
+        conditions.append("(LOWER(denominacio) LIKE ? OR LOWER(descripcio) LIKE ? OR LOWER(comarca_i_municipi) LIKE ? OR LOWER(espai) LIKE ?)")
+        params.extend([f"%{query}%", f"%{query}%", f"%{query}%", f"%{query}%"])
+    
+    # Filtro por fecha desde
+    if date_from:
+        conditions.append("data_inici >= ?")
+        params.append(date_from)
+    
+    # Filtro por fecha hasta
+    if date_to:
+        conditions.append("data_inici <= ?")
+        params.append(date_to)
+    
+    # Filtro por precio
+    if price_filter:
+        if price_filter == "free":
+            conditions.append("(entrades LIKE '%gratuit%' OR entrades LIKE '%gratis%' OR entrades LIKE '%gratuïta%')")
+        elif price_filter == "paid":
+            conditions.append("NOT (entrades LIKE '%gratuit%' OR entrades LIKE '%gratis%' OR entrades LIKE '%gratuïta%')")
+    
+    # Filtro por categoría
+    if category_filter:
+        if category_filter == "teatre":
+            conditions.append("tags_categories LIKE '%teatre%'")
+        elif category_filter == "musica":
+            conditions.append("tags_categories LIKE '%musica%'")
+        elif category_filter == "exposicions":
+            conditions.append("(tags_categories LIKE '%exposicio%' OR tags_categories LIKE '%exposiciones%')")
+        elif category_filter == "dansa":
+            conditions.append("tags_categories LIKE '%dansa%'")
+        elif category_filter == "cinema":
+            conditions.append("tags_categories LIKE '%cinema%'")
+        elif category_filter == "literatura":
+            conditions.append("(tags_categories LIKE '%llibres%' OR tags_categories LIKE '%literatura%')")
+        elif category_filter == "gastronomia":
+            conditions.append("tags_categories LIKE '%gastronomia%'")
+    
+    # Construir consulta final
+    if conditions:
+        where_clause = " WHERE " + " AND ".join(conditions)
+        count_query = "SELECT COUNT(*) FROM events" + where_clause
+        final_query = base_query + where_clause + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([per_page, offset])
+    else:
+        count_query = "SELECT COUNT(*) FROM events"
+        final_query = base_query + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params = [per_page, offset]
+    
+    # Ejecutar consulta
+    c.execute(final_query, params)
     rows = c.fetchall()
+    
+    # Contar total para paginación
+    c.execute(count_query, params[:-2] if conditions else [])
+    total_count = c.fetchone()[0]
+    
     conn.close()
 
     events = []
@@ -467,9 +572,9 @@ def api_events():
             "entrades": r["entrades"],
             "url": r["url"],
         })
-    return jsonify({"events": events})
+    return jsonify({"events": events, "total": total_count})
 
-# --- API DE BÚSQUEDA ---
+# --- API DE BÚSQUEDA (SIMPLIFICADA) ---
 @app.route("/api/search")
 def api_search():
     query = request.args.get("q", "").strip().lower()
@@ -508,6 +613,38 @@ def api_search():
             "url": r["url"],
         })
     return jsonify({"events": events})
+
+# --- API PARA OBTENER OPCIONES DE FILTRO ---
+@app.route("/api/filters")
+def api_filters():
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Categorías disponibles
+    c.execute("""
+        SELECT DISTINCT 
+            CASE 
+                WHEN tags_categories LIKE '%teatre%' THEN 'teatre'
+                WHEN tags_categories LIKE '%musica%' THEN 'musica'
+                WHEN tags_categories LIKE '%exposicio%' OR tags_categories LIKE '%exposiciones%' THEN 'exposicions'
+                WHEN tags_categories LIKE '%dansa%' THEN 'dansa'
+                WHEN tags_categories LIKE '%cinema%' THEN 'cinema'
+                WHEN tags_categories LIKE '%llibres%' OR tags_categories LIKE '%literatura%' THEN 'literatura'
+                WHEN tags_categories LIKE '%gastronomia%' THEN 'gastronomia'
+                ELSE 'altres'
+            END as category
+        FROM events
+        WHERE tags_categories IS NOT NULL
+        AND tags_categories != ''
+    """)
+    categories = [row["category"] for row in c.fetchall() if row["category"] != 'altres']
+    
+    conn.close()
+    
+    return jsonify({
+        "categories": sorted(set(categories)),
+        "price_options": ["free", "paid"]
+    })
 
 # ============================
 # NUEVA RUTA: Favoritos

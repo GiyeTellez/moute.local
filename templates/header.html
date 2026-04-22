@@ -24,33 +24,46 @@
                     </a>
                 </li>
                 
-                {% if session.admin_logged_in %}
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-user-shield me-1"></i>Admin
-                            <span class="admin-badge">Administrador</span>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('admin_panel') }}">
-                                <i class="fas fa-tachometer-alt me-2"></i>Panel de Administración
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('update_events_page') }}">
-                                <i class="fas fa-upload me-2"></i>Actualizar Base de Datos
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('change_password') }}">
-                                <i class="fas fa-key me-2"></i>Cambiar Contraseña
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
-                                <i class="fas fa-sign-out-alt me-2"></i>Cerrar Sesión
-                            </a></li>
-                        </ul>
-                    </li>
+                {% if session.logged_in %}
+                    {% if session.admin_logged_in %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-user-shield me-1"></i>{{ session.username }}
+                                <span class="admin-badge">Administrador</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('admin_panel') }}">
+                                    <i class="fas fa-tachometer-alt me-2"></i>Panel de Administración
+                                </a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('update_events_page') }}">
+                                    <i class="fas fa-upload me-2"></i>Actualizar Base de Datos
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('change_password') }}">
+                                    <i class="fas fa-key me-2"></i>Cambiar Contraseña
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
+                                    <i class="fas fa-sign-out-alt me-2"></i>Cerrar Sesión
+                                </a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-user me-1"></i>{{ session.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
+                                    <i class="fas fa-sign-out-alt me-2"></i>Cerrar Sesión
+                                </a></li>
+                            </ul>
+                        </li>
+                    {% endif %}
                 {% else %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('login') }}">
-                            <i class="fas fa-sign-in-alt me-1"></i>Login Admin
+                            <i class="fas fa-sign-in-alt me-1"></i>Login
                         </a>
                     </li>
                 {% endif %}
